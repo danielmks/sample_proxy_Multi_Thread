@@ -50,7 +50,7 @@
 
 ### 시퀀스 다이어그램
 
-![diagram](images/sequence_diagram_v2.png)
+![diagram](images/multi_thread_diagram.png)
 
 ### 멀티 스레드 구조
 
