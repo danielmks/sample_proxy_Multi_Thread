@@ -52,7 +52,5 @@
 
 ![diagram](images/multi_thread_diagram.png)
 
-### 멀티 스레드 구조
-
 
 
