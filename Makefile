@@ -1,19 +1,18 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -O2
-TARGET = proxy
-SRC = main.c proxy.c
-OBJ = $(SRC:.c=.o)
+CC=gcc
+CFLAGS=-Wall -Wextra -g
+LDFLAGS=-lpthread
 
-all: $(TARGET)
+all: proxy
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+proxy: main.o proxy.o
+	$(CC) $(CFLAGS) -o proxy main.o proxy.o $(LDFLAGS)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+main.o: main.c proxy.h
+	$(CC) $(CFLAGS) -c main.c
+
+proxy.o: proxy.c proxy.h
+	$(CC) $(CFLAGS) -c proxy.c
 
 clean:
-	rm -f $(TARGET) $(OBJ)
-
-.PHONY: all clean
+	rm -f proxy *.o
 

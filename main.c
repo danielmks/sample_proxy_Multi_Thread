@@ -1,15 +1,25 @@
 #include "proxy.h"
+#include <pthread.h>
+
+void *thread_func(void *arg) {
+    int client_socket = *((int *)arg);
+    free(arg);
+    handle_client(client_socket);
+    close(client_socket);
+    return NULL;
+}
 
 int main(int argc, char *argv[]) {
-    int listen_socket, client_socket;
+    int listen_socket, *client_socket;
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
     int server_port = DEFAULT_SERVER_PORT;
+    pthread_t thread_id;
 
     // 차단할 도메인 목록을 blocked.txt 파일에서 로드
     load_blocked_domains("blocked.txt");
 
-    // 명령행 인자로 포트 번호를 받으면 해당 값을 사용
+    // 명령행 인자로 포트 번호를 받으면 해당 값 사용
     if (argc > 1) {
         server_port = atoi(argv[1]);
         if (server_port <= 0) {
@@ -17,8 +27,6 @@ int main(int argc, char *argv[]) {
             exit(EXIT_FAILURE);
         }
     }
-
-    signal(SIGCHLD, SIG_IGN);
 
     listen_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_socket < 0) {
@@ -53,18 +61,22 @@ int main(int argc, char *argv[]) {
     printf("프록시 서버가 포트 %d에서 대기 중...\n", server_port);
 
     while (1) {
-        client_socket = accept(listen_socket, (struct sockaddr*)&client_addr, &client_addr_len);
-        if (client_socket < 0) {
+        client_socket = malloc(sizeof(int));
+        *client_socket = accept(listen_socket, (struct sockaddr*)&client_addr, &client_addr_len);
+        if (*client_socket < 0) {
             perror("accept");
+            free(client_socket);
             continue;
         }
 
-        if (fork() == 0) {  // 자식 프로세스
-            close(listen_socket);
-            handle_client(client_socket);
-            exit(0);
+        if (pthread_create(&thread_id, NULL, thread_func, client_socket) != 0) {
+            perror("pthread_create");
+            free(client_socket);
+            continue;
         }
-        close(client_socket);
+
+        // 스레드가 종료되면 자동으로 자원 반환
+        pthread_detach(thread_id);
     }
 
     close(listen_socket);
