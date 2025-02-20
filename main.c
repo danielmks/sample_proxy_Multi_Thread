@@ -1,11 +1,19 @@
 #include "proxy.h"
 #include <pthread.h>
+#include <semaphore.h>
+
+#define MAX_THREADS 200
+
+// 세마포어 전역 변수: 동시에 실행 가능한 최대 스레드 수를 제어
+sem_t thread_sem;
 
 void *thread_func(void *arg) {
     int client_socket = *((int *)arg);
     free(arg);
     handle_client(client_socket);
     close(client_socket);
+    // 스레드 종료 시 세마포어 슬롯 반환
+    sem_post(&thread_sem);
     return NULL;
 }
 
@@ -16,10 +24,10 @@ int main(int argc, char *argv[]) {
     int server_port = DEFAULT_SERVER_PORT;
     pthread_t thread_id;
 
-    // 차단할 도메인 목록을 blocked.txt 파일에서 로드
+    // 차단할 도메인 목록 로드
     load_blocked_domains("blocked.txt");
 
-    // 명령행 인자로 포트 번호를 받으면 해당 값 사용
+    // 명령행 인자로 포트 번호 지정 시 사용
     if (argc > 1) {
         server_port = atoi(argv[1]);
         if (server_port <= 0) {
@@ -58,7 +66,10 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    printf("프록시 서버(멀티 스레드)가 포트 %d에서 대기 중...\n", server_port);
+    printf("프록시 서버가 포트 %d에서 대기 중...\n", server_port);
+
+    // 세마포어 초기화: 동시에 MAX_THREADS개의 스레드 슬롯 확보
+    sem_init(&thread_sem, 0, MAX_THREADS);
 
     while (1) {
         client_socket = malloc(sizeof(int));
@@ -69,9 +80,13 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // 사용 가능한 스레드 슬롯이 생길 때까지 대기
+        sem_wait(&thread_sem);
+
         if (pthread_create(&thread_id, NULL, thread_func, client_socket) != 0) {
             perror("pthread_create");
             free(client_socket);
+            sem_post(&thread_sem); // 스레드 생성 실패 시 슬롯 반환
             continue;
         }
 
@@ -80,6 +95,7 @@ int main(int argc, char *argv[]) {
     }
 
     close(listen_socket);
+    sem_destroy(&thread_sem);
     return 0;
 }
 
